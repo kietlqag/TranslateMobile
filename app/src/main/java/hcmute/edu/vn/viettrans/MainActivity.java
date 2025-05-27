@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private RequestQueue requestQueue;
 
     // Constants
-    private static final String GOOGLE_TRANSLATE_API_KEY = "YOUR_GOOGLETRANSLATE_API";
+    private static final String GOOGLE_TRANSLATE_API_KEY = "YOUR_API_KEY";
     private static final String TRANSLATE_URL = "https://translation.googleapis.com/language/translate/v2";
     private static final String DETECT_URL = "https://translation.googleapis.com/language/translate/v2/detect";
 
@@ -370,6 +370,8 @@ public class MainActivity extends AppCompatActivity {
                 Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
                 intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                         RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                String selectedLangCode = languages.get(fromLanguageSpinner.getSelectedItemPosition()).getCode();
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLangCode);
                 intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Nói điều gì đó...");
 
                 speechLauncher.launch(intent);

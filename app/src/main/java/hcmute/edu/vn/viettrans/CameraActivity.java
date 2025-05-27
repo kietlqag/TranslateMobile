@@ -10,6 +10,7 @@ import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.Toast;
@@ -27,6 +28,10 @@ import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -36,6 +41,11 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -162,7 +172,8 @@ public class CameraActivity extends AppCompatActivity {
             Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
             if (bitmap != null) {
                 InputImage image = InputImage.fromBitmap(bitmap, 0);
-                recognizeText(image);
+                recognizeTextWithGoogleCloud(bitmap);
+//                recognizeText(image);
             } else {
                 Toast.makeText(this, "Không thể đọc ảnh", Toast.LENGTH_SHORT).show();
                 captureButton.setEnabled(true);
@@ -207,4 +218,81 @@ public class CameraActivity extends AppCompatActivity {
             cameraProvider.unbindAll();
         }
     }
+    private void recognizeTextWithGoogleCloud(Bitmap bitmap) {
+        captureButton.setEnabled(false);
+
+        // Convert bitmap to Base64
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+        byte[] imageBytes = baos.toByteArray();
+        String base64Image = Base64.encodeToString(imageBytes, Base64.NO_WRAP);
+
+        // Build JSON request
+        JSONObject requestJson = new JSONObject();
+        try {
+            JSONObject image = new JSONObject();
+            image.put("content", base64Image);
+
+            JSONObject feature = new JSONObject();
+            feature.put("type", "TEXT_DETECTION");
+
+            JSONArray featuresArray = new JSONArray();
+            featuresArray.put(feature);
+
+            JSONObject request = new JSONObject();
+            request.put("image", image);
+            request.put("features", featuresArray);
+
+            JSONArray requestsArray = new JSONArray();
+            requestsArray.put(request);
+
+            requestJson.put("requests", requestsArray);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Lỗi khi tạo JSON yêu cầu", Toast.LENGTH_SHORT).show();
+            captureButton.setEnabled(true);
+            return;
+        }
+
+        // GET Google OCR API
+        String apiKey = "YOUR_API_KEY";
+        String url = "https://vision.googleapis.com/v1/images:annotate?key=" + apiKey;
+
+        RequestQueue queue = Volley.newRequestQueue(this);
+        JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(Request.Method.POST, url, requestJson,
+                response -> {
+                    try {
+                        JSONArray responses = response.getJSONArray("responses");
+                        JSONObject annotation = responses.getJSONObject(0);
+
+                        if (!annotation.has("fullTextAnnotation")) {
+                            Toast.makeText(this, "Không tìm thấy văn bản", Toast.LENGTH_SHORT).show();
+                            captureButton.setEnabled(true);
+                            return;
+                        }
+
+                        String text = annotation.getJSONObject("fullTextAnnotation").getString("text");
+
+                        Intent resultIntent = new Intent();
+                        resultIntent.putExtra("extracted_text", text);
+                        setResult(RESULT_OK, resultIntent);
+                        finish();
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                        Toast.makeText(this, "Lỗi khi xử lý kết quả OCR", Toast.LENGTH_SHORT).show();
+                        captureButton.setEnabled(true);
+                    }
+                },
+                error -> {
+                    error.printStackTrace();
+                    Toast.makeText(this, "Lỗi khi gọi Google Vision API", Toast.LENGTH_SHORT).show();
+                    captureButton.setEnabled(true);
+                });
+
+        queue.add(jsonObjectRequest);
+    }
 }
+
+
