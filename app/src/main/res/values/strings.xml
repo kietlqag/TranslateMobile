@@ -1,0 +1,60 @@
+<resources>
+    <string name="app_name">Viet Translate</string>
+
+    <!-- Main Activity -->
+    <string name="input_hint">Nhập văn bản cần dịch...</string>
+    <string name="output_hint">Kết quả dịch sẽ hiển thị ở đây...</string>
+    <string name="translate_button">Dịch</string>
+    <string name="clear_button">Xóa</string>
+    <string name="history_label">Lịch sử dịch</string>
+
+    <!-- Language names -->
+    <string name="auto_detect">Phát hiện tự động</string>
+    <string name="vietnamese">Tiếng Việt</string>
+    <string name="english">English</string>
+    <string name="chinese">中文</string>
+    <string name="japanese">日本語</string>
+    <string name="korean">한국어</string>
+    <string name="french">Français</string>
+    <string name="german">Deutsch</string>
+    <string name="spanish">Español</string>
+    <string name="russian">Русский</string>
+    <string name="thai">ไทย</string>
+    <string name="indonesian">Bahasa Indonesia</string>
+
+    <!-- Content descriptions -->
+    <string name="camera_button_desc">Chụp ảnh</string>
+    <string name="mic_button_desc">Ghi âm</string>
+    <string name="swap_languages_desc">Đổi ngôn ngữ</string>
+    <string name="copy_button_desc">Sao chép</string>
+    <string name="back_button_desc">Quay lại</string>
+
+    <!-- Camera Activity -->
+    <string name="camera_title">Chụp ảnh để dịch</string>
+    <string name="camera_instruction">Đưa camera đến văn bản cần dịch và nhấn nút chụp</string>
+
+    <!-- Toast messages -->
+    <string name="enter_text_to_translate">Vui lòng nhập văn bản cần dịch</string>
+    <string name="same_language_error">Ngôn ngữ nguồn và đích không thể giống nhau</string>
+    <string name="translation_error">Lỗi khi dịch: %1$s</string>
+    <string name="processing_translation_error">Lỗi khi xử lý kết quả dịch</string>
+    <string name="camera_init_error">Không thể khởi tạo camera</string>
+    <string name="camera_binding_error">Lỗi khi kết nối camera</string>
+    <string name="image_capture_error">Lỗi khi chụp ảnh</string>
+    <string name="image_read_error">Không thể đọc ảnh</string>
+    <string name="image_processing_error">Lỗi khi xử lý ảnh</string>
+    <string name="text_recognition_error">Lỗi khi nhận diện văn bản</string>
+    <string name="no_text_found">Không tìm thấy văn bản trong ảnh</string>
+    <string name="camera_permission_needed">Cần quyền camera để sử dụng tính năng này</string>
+    <string name="mic_permission_needed">Cần quyền ghi âm để sử dụng tính năng này</string>
+    <string name="speech_not_supported">Thiết bị không hỗ trợ nhận diện giọng nói</string>
+    <string name="swap_auto_detect_error">Không thể hoán đổi với chế độ tự động phát hiện</string>
+    <string name="nothing_to_copy">Không có gì để sao chép</string>
+    <string name="copied_to_clipboard">Đã sao chép vào clipboard</string>
+
+    <!-- Speech recognition -->
+    <string name="speech_prompt">Nói điều gì đó...</string>
+
+    <!-- Language detection -->
+    <string name="detected_language">Phát hiện: %1$s (%2$.0f%%)</string>
+</resources>
