@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId = "hcmute.edu.vn.viettrans"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 33
         versionCode = 1
         versionName = "1.0"
 

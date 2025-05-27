@@ -9,6 +9,8 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.translation.Translator;
 import android.widget.AdapterView;
@@ -24,7 +26,9 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -49,8 +53,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import hcmute.edu.vn.viettrans.adapter.HistoryListAdapter;
+import hcmute.edu.vn.viettrans.database.TranslationHistoryDAO;
 import hcmute.edu.vn.viettrans.model.Language;
 import hcmute.edu.vn.viettrans.model.TranslationHistory;
+import hcmute.edu.vn.viettrans.utils.SettingsManager;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -66,8 +73,10 @@ public class MainActivity extends AppCompatActivity {
     // Data
     private List<Language> languages;
     private List<TranslationHistory> historyList;
-    private TranslationHistoryAdapter historyAdapter;
+    private HistoryListAdapter historyAdapter;
     private RequestQueue requestQueue;
+    private TranslationHistoryDAO historyDAO;
+    private SettingsManager settingsManager;
 
     // Constants
     private static final String GOOGLE_TRANSLATE_API_KEY = "YOUR_API_KEY";
@@ -80,6 +89,8 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<String> micPermissionLauncher;
     private ActivityResultLauncher<String> cameraPermissionLauncher;
 
+    private boolean isDarkMode = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -88,12 +99,30 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupLanguages();
         setupSpinners();
-        setupRecyclerView();
         setupClickListeners();
         setupActivityResultLaunchers();
 
         requestQueue = Volley.newRequestQueue(this);
         historyList = new ArrayList<>();
+        historyDAO = new TranslationHistoryDAO(this);
+        settingsManager = new SettingsManager(this);
+        setupRecyclerView();
+        loadTranslationHistory();
+        applySettings();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadTranslationHistory();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (historyDAO != null) {
+            historyDAO.close();
+        }
     }
 
     private void initViews() {
@@ -162,9 +191,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupRecyclerView() {
-        historyAdapter = new TranslationHistoryAdapter(historyList, this::onHistoryItemClick);
+        if (historyList == null) {
+            historyList = new ArrayList<>();
+        }
+        historyAdapter = new HistoryListAdapter(historyList, this::onHistoryItemClick);
         historyRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         historyRecyclerView.setAdapter(historyAdapter);
+        historyRecyclerView.setNestedScrollingEnabled(true);
     }
 
     private void setupClickListeners() {
@@ -230,7 +263,9 @@ public class MainActivity extends AppCompatActivity {
     private void translateText() {
         String text = inputText.getText().toString().trim();
         if (text.isEmpty()) {
-            Toast.makeText(this, "Vui lòng nhập văn bản cần dịch", Toast.LENGTH_SHORT).show();
+            if (settingsManager.isShowNotificationsEnabled()) {
+                Toast.makeText(this, "Vui lòng nhập văn bản cần dịch", Toast.LENGTH_SHORT).show();
+            }
             return;
         }
 
@@ -238,7 +273,9 @@ public class MainActivity extends AppCompatActivity {
         String toLang = languages.get(toLanguageSpinner.getSelectedItemPosition()).getCode();
 
         if (fromLang.equals(toLang) && !fromLang.equals("auto")) {
-            Toast.makeText(this, "Ngôn ngữ nguồn và đích không thể giống nhau", Toast.LENGTH_SHORT).show();
+            if (settingsManager.isShowNotificationsEnabled()) {
+                Toast.makeText(this, "Ngôn ngữ nguồn và đích không thể giống nhau", Toast.LENGTH_SHORT).show();
+            }
             return;
         }
 
@@ -419,37 +456,39 @@ public class MainActivity extends AppCompatActivity {
 
     private void addToHistory(String originalText, String translatedText,
                               String fromLang, String toLang) {
-        String fromLangName = getLanguageName(fromLang);
-        String toLangName = getLanguageName(toLang);
-
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
-        String timestamp = sdf.format(new Date());
-
-        TranslationHistory history = new TranslationHistory(
-                originalText, translatedText, fromLangName, toLangName, timestamp);
-
-        historyList.add(0, history); // Add to beginning
-        historyAdapter.notifyItemInserted(0);
-
-        // Show history section if it was hidden
-        if (historyLabel.getVisibility() == View.GONE) {
-            historyLabel.setVisibility(View.VISIBLE);
+        if (!settingsManager.isSaveHistoryEnabled()) {
+            return;
         }
 
-        // Limit history to 50 items
-        if (historyList.size() > 50) {
-            historyList.remove(historyList.size() - 1);
-            historyAdapter.notifyItemRemoved(historyList.size());
+        try {
+            String fromLangName = getLanguageName(fromLang);
+            String toLangName = getLanguageName(toLang);
+
+            TranslationHistory history = new TranslationHistory(
+                    originalText, translatedText, fromLangName, toLangName);
+
+            // Save to database
+            historyDAO.open();
+            historyDAO.insertHistory(history);
+            historyDAO.close();
+
+            // Reload history from database
+            loadTranslationHistory();
+        } catch (Exception e) {
+            e.printStackTrace();
+            if (historyDAO != null) {
+                historyDAO.close();
+            }
         }
     }
 
     private void onHistoryItemClick(TranslationHistory history) {
-        inputText.setText(history.getOriginalText());
+        inputText.setText(history.getSourceText());
         outputText.setText(history.getTranslatedText());
 
         // Set spinners to match history item
-        setSpinnerSelection(fromLanguageSpinner, history.getFromLanguage());
-        setSpinnerSelection(toLanguageSpinner, history.getToLanguage());
+        setSpinnerSelection(fromLanguageSpinner, history.getSourceLang());
+        setSpinnerSelection(toLanguageSpinner, history.getTargetLang());
     }
 
     private void setSpinnerSelection(Spinner spinner, String languageName) {
@@ -464,5 +503,160 @@ public class MainActivity extends AppCompatActivity {
     private void showProgress(boolean show) {
         progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
         translateButton.setEnabled(!show);
+    }
+
+    private void loadTranslationHistory() {
+        try {
+            historyDAO.open();
+            List<TranslationHistory> histories = historyDAO.getAllHistory();
+            historyList.clear();
+            historyList.addAll(histories);
+            historyDAO.close();
+
+            // Show history section if there are items
+            if (!historyList.isEmpty()) {
+                historyLabel.setVisibility(View.VISIBLE);
+                if (historyAdapter != null) {
+                    historyAdapter.notifyDataSetChanged();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            if (historyDAO != null) {
+                historyDAO.close();
+            }
+        }
+    }
+
+    private void applySettings() {
+        // Apply font size
+        int fontSize = settingsManager.getFontSize();
+        inputText.setTextSize(fontSize);
+        outputText.setTextSize(fontSize);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_theme) {
+            toggleTheme();
+            return true;
+        } else if (id == R.id.action_clear_history) {
+            showClearHistoryDialog();
+            return true;
+        } else if (id == R.id.action_about) {
+            showAboutDialog();
+            return true;
+        } else if (id == R.id.action_settings) {
+            showSettingsDialog();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void showClearHistoryDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("Xóa lịch sử")
+            .setMessage("Bạn có chắc muốn xóa toàn bộ lịch sử dịch?")
+            .setPositiveButton("Xóa", (dialog, which) -> {
+                historyDAO.open();
+                historyDAO.clearAllHistory();
+                historyDAO.close();
+                historyList.clear();
+                historyAdapter.notifyDataSetChanged();
+                historyLabel.setVisibility(View.GONE);
+                Toast.makeText(this, "Đã xóa lịch sử", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("Hủy", null)
+            .show();
+    }
+
+    private void showAboutDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("Giới thiệu")
+            .setMessage("Viet Translate\nPhiên bản 1.0\n\nỨng dụng dịch văn bản đa ngôn ngữ với các tính năng:\n" +
+                    "- Dịch văn bản giữa nhiều ngôn ngữ\n" +
+                    "- Nhận dạng văn bản từ ảnh\n" +
+                    "- Nhận dạng giọng nói\n" +
+                    "- Lưu lịch sử dịch\n" +
+                    "- Hỗ trợ chế độ sáng/tối")
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
+    private void showSettingsDialog() {
+        boolean[] checkedItems = {
+            settingsManager.isSaveHistoryEnabled(),
+            settingsManager.isShowNotificationsEnabled()
+        };
+
+        new AlertDialog.Builder(this)
+            .setTitle("Cài đặt")
+            .setMultiChoiceItems(
+                new String[]{
+                    "Lưu lịch sử dịch",
+                    "Hiển thị thông báo"
+                },
+                checkedItems,
+                (dialog, which, isChecked) -> {
+                    switch (which) {
+                        case 0:
+                            settingsManager.setSaveHistoryEnabled(isChecked);
+                            break;
+                        case 1:
+                            settingsManager.setShowNotificationsEnabled(isChecked);
+                            break;
+                    }
+                }
+            )
+            .setPositiveButton("OK", (dialog, which) -> {
+                applySettings();
+                Toast.makeText(this, "Đã cập nhật cài đặt", Toast.LENGTH_SHORT).show();
+            })
+            .setNeutralButton("Cỡ chữ", (dialog, which) -> showFontSizeDialog())
+            .show();
+    }
+
+    private void showFontSizeDialog() {
+        String[] sizes = {"Nhỏ", "Vừa", "Lớn", "Rất lớn"};
+        int currentSize = settingsManager.getFontSize();
+        int selectedIndex = 0;
+        
+        if (currentSize <= 14) selectedIndex = 0;
+        else if (currentSize <= 16) selectedIndex = 1;
+        else if (currentSize <= 18) selectedIndex = 2;
+        else selectedIndex = 3;
+
+        new AlertDialog.Builder(this)
+            .setTitle("Chọn cỡ chữ")
+            .setSingleChoiceItems(sizes, selectedIndex, (dialog, which) -> {
+                int newSize;
+                switch (which) {
+                    case 0: newSize = 14; break;
+                    case 1: newSize = 16; break;
+                    case 2: newSize = 18; break;
+                    case 3: newSize = 20; break;
+                    default: newSize = 16;
+                }
+                settingsManager.setFontSize(newSize);
+                applySettings();
+            })
+            .setPositiveButton("OK", null)
+            .show();
+    }
+
+    private void toggleTheme() {
+        isDarkMode = !isDarkMode;
+        if (isDarkMode) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+        }
     }
 }
